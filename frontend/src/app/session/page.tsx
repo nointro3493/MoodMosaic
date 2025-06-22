@@ -11,7 +11,7 @@ type Message = {
 };
 
 const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc";
-const defaultVoiceId = "f291d7d9-8dee-4b1c-9d09-1826eba2d965"; // Voix par défaut
+const defaultVoiceId = "f291d7d9-8dee-4b1c-9d09-1826eba2d965"; // Default voice
 
 export default function SessionPage() {
   const [vapi, setVapi] = useState<Vapi | null>(null);
@@ -28,8 +28,8 @@ export default function SessionPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fonction pour analyser l'émotion et obtenir la voix appropriée
-  const analyzeEmotionAndGetVoice = async (userInput: string): Promise<{ emotion: string; voiceId: string }> => {
+  // Function to analyze emotion and get appropriate voice
+  const analyzeEmotionAndGetVoice = async (userInput: string): Promise<{ emotion: string; voiceId: string; description?: string }> => {
     try {
       const response = await fetch('http://localhost:3001/get-voice', {
         method: 'POST',
@@ -47,17 +47,19 @@ export default function SessionPage() {
       return {
         emotion: data.personality,
         voiceId: data.voiceId,
+        description: data.description,
       };
     } catch (error) {
       console.error('Error analyzing emotion:', error);
       return {
         emotion: 'calm',
         voiceId: defaultVoiceId,
+        description: 'Calm and composed voice',
       };
     }
   };
 
-  // Fonction pour obtenir une réponse de l'assistant
+  // Function to get assistant reply
   const getAssistantReply = async (userInput: string, emotion: string): Promise<string> => {
     try {
       const response = await fetch('http://localhost:3001/get-reply', {
@@ -133,10 +135,10 @@ export default function SessionPage() {
   const startCall = async (voiceId: string = currentVoiceId) => {
     if (!vapi) return;
     try {
-      // Arrêter l'appel actuel s'il y en a un
+      // Stop current call if there is one
       vapi.stop();
       
-      // Démarrer un nouvel appel avec la nouvelle voix
+      // Start new call with the new voice
       await vapi.start(voiceId);
       setCurrentVoiceId(voiceId);
     } catch (error) {
@@ -163,10 +165,10 @@ export default function SessionPage() {
     setIsAnalyzing(true);
 
     try {
-      // Analyser l'émotion et obtenir la voix appropriée
-      const { emotion, voiceId } = await analyzeEmotionAndGetVoice(input);
+      // Analyze emotion and get appropriate voice
+      const { emotion, voiceId, description } = await analyzeEmotionAndGetVoice(input);
       
-      // Obtenir la réponse de l'assistant
+      // Get assistant reply
       const aiReply = await getAssistantReply(input, emotion);
       
       const aiMessage: Message = {
@@ -178,14 +180,14 @@ export default function SessionPage() {
 
       setMessages((prev) => [...prev, aiMessage]);
 
-      // Démarrer l'appel vocal avec la nouvelle voix si elle est différente
+      // Start voice call with new voice if different
       if (voiceId !== currentVoiceId) {
         await startCall(voiceId);
       } else {
         await startCall(voiceId);
       }
 
-      // Envoyer le message à Vapi
+      // Send message to Vapi
       if (vapi) {
         await vapi.send({
           type: 'add-message',

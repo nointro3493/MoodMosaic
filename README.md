@@ -1,27 +1,28 @@
-# MoodMosaic - Système de Voix Dynamiques
+# MoodMosaic - Dynamic Voice System
 
-MoodMosaic est une application thérapeutique qui utilise l'IA pour adapter dynamiquement la voix de l'assistant selon l'état émotionnel de l'utilisateur.
+MoodMosaic is a therapeutic application that uses AI to dynamically adapt the assistant's voice based on the user's emotional state.
 
-## Fonctionnalités
+## Features
 
-### 🎭 Voix Dynamiques
-Le système analyse automatiquement les messages de l'utilisateur et change la voix de l'assistant selon l'émotion détectée :
+### 🎭 Dynamic Voices
+The system automatically analyzes user messages and changes the assistant's voice according to the detected emotion:
 
-- **Calm** : Voix apaisante pour les conversations générales
-- **Energetic** : Voix motivante pour l'enthousiasme
-- **Sad** : Voix douce et mélancolique pour la tristesse
-- **Happy** : Voix joyeuse pour les émotions positives
-- **Anxious** : Voix très apaisante pour l'anxiété
-- **Angry** : Voix ferme mais calme pour la colère
-- **Empathetic** : Voix très compréhensive
-- **Professional** : Voix structurée pour les sujets sérieux
-- **Warm** : Voix chaleureuse et réconfortante
-- **Soothing** : Voix extrêmement apaisante
+- **Calm**: Soothing voice for general conversations
+- **Energetic**: Motivating voice for enthusiasm
+- **Sad**: Soft and melancholic voice for sadness
+- **Happy**: Joyful voice for positive emotions
+- **Anxious**: Very soothing voice for anxiety
+- **Angry**: Firm but calm voice for anger
+- **Empathetic**: Very understanding voice
+- **Professional**: Structured voice for serious topics
+- **Warm**: Warm and comforting voice
+- **Soothing**: Extremely soothing voice
 
-### 🤖 Analyse Émotionnelle
-- Utilise Claude AI pour analyser le contexte émotionnel
-- Détecte automatiquement l'émotion dominante
-- Adapte le style de réponse selon l'émotion
+### 🤖 Emotional Analysis
+- Uses Claude 4 AI for sophisticated emotional context analysis
+- Automatically detects the dominant emotion
+- Adapts response style according to the emotion
+- Considers context, tone, and implicit emotional cues
 
 ## Installation
 
@@ -39,24 +40,24 @@ npm install
 
 ## Configuration
 
-### Variables d'environnement
-Créez un fichier `.env` dans le dossier `backend` :
+### Environment Variables
+Create a `.env` file in the `backend` folder:
 ```env
-ANTHROPIC_API_KEY=votre_clé_api_claude
+ANTHROPIC_API_KEY=your_claude_api_key
 ```
 
-### Voix Vapi
-Les IDs de voix sont configurés dans `backend/src/voiceConfig.ts`. Vous pouvez les modifier selon vos besoins.
+### Vapi Voices
+Voice IDs are configured in `backend/src/voiceConfig.ts`. You can modify them according to your needs.
 
-## Utilisation
+## Usage
 
-### Démarrer le backend
+### Start the backend
 ```bash
 cd backend
 npm start
 ```
 
-### Démarrer le frontend
+### Start the frontend
 ```bash
 cd frontend
 npm run dev
@@ -65,12 +66,12 @@ npm run dev
 ## API Endpoints
 
 ### POST /get-voice
-Analyse l'émotion d'un message et retourne la voix appropriée.
+Analyzes the emotion of a message and returns the appropriate voice.
 
 **Request:**
 ```json
 {
-  "input": "Je me sens vraiment triste aujourd'hui"
+  "input": "I'm feeling really sad today"
 }
 ```
 
@@ -78,54 +79,81 @@ Analyse l'émotion d'un message et retourne la voix appropriée.
 ```json
 {
   "personality": "sad",
-  "voiceId": "21m00Tcm4TlvDq8ikWAM"
+  "voiceId": "21m00Tcm4TlvDq8ikWAM",
+  "description": "Soft and melancholic voice for sadness"
 }
 ```
 
 ### POST /get-reply
-Génère une réponse adaptée à l'émotion détectée.
+Generates a response adapted to the detected emotion.
 
 **Request:**
 ```json
 {
-  "input": "Je me sens vraiment triste aujourd'hui",
+  "input": "I'm feeling really sad today",
   "emotion": "sad",
   "persona": "therapist"
 }
 ```
 
 ### GET /voices
-Retourne toutes les voix disponibles.
+Returns all available voices.
 
 ## Architecture
 
 ```
-frontend/          # Interface utilisateur React
+frontend/          # React user interface
 ├── src/app/
-│   └── session/   # Page de chat avec voix dynamiques
+│   └── session/   # Chat page with dynamic voices
 
-backend/           # API Node.js
+backend/           # Node.js API
 ├── src/
-│   ├── server.ts      # Serveur Express
-│   ├── voiceConfig.ts # Configuration des voix
-│   └── assistant.ts   # Assistant Vapi
+│   ├── server.ts      # Express server
+│   ├── voiceConfig.ts # Voice configuration
+│   └── assistant.ts   # Vapi assistant
 ```
 
-## Personnalisation
+## Customization
 
-### Ajouter une nouvelle voix
-1. Modifiez `backend/src/voiceConfig.ts`
-2. Ajoutez une nouvelle entrée avec l'ID de voix Vapi
-3. Définissez les émotions associées
+### Adding a new voice
+1. Modify `backend/src/voiceConfig.ts`
+2. Add a new entry with the Vapi voice ID
+3. Define associated emotions
 
-### Modifier la classification émotionnelle
-1. Modifiez le prompt système dans `backend/src/server.ts`
-2. Ajustez les labels d'émotions selon vos besoins
+### Modifying emotional classification
+1. Modify the system prompt in `backend/src/server.ts`
+2. Adjust emotion labels according to your needs
 
-## Technologies Utilisées
+## Advanced Features
 
-- **Frontend** : Next.js, React, TypeScript
-- **Backend** : Node.js, Express, TypeScript
-- **IA** : Claude AI (Anthropic)
-- **Voix** : Vapi AI
-- **Styling** : Tailwind CSS 
+### Claude 4 Emotion Analysis
+The system uses Claude 4 for sophisticated emotion detection:
+- Analyzes overall context and tone, not just keywords
+- Considers emotional intensity and urgency
+- Evaluates implicit emotional cues
+- Handles mixed emotions by selecting the dominant one
+- Considers cultural and contextual factors
+
+### Dynamic Voice Switching
+- Real-time emotion detection
+- Seamless voice transitions
+- Context-aware voice selection
+- Fallback to default voice for unrecognized emotions
+
+## Technologies Used
+
+- **Frontend**: Next.js, React, TypeScript
+- **Backend**: Node.js, Express, TypeScript
+- **AI**: Claude 4 (Anthropic)
+- **Voice**: Vapi AI
+- **Styling**: Tailwind CSS
+
+## Testing Examples
+
+Try these messages to test different emotions:
+
+- "I'm feeling really sad" → Melancholic voice
+- "I'm super excited!" → Energetic voice
+- "I'm afraid of the future" → Soothing voice
+- "I'm so angry right now" → Firm but calm voice
+- "I need someone to understand me" → Empathetic voice 

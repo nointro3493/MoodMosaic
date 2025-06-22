@@ -72,12 +72,12 @@ export const voiceConfig = {
 };
 
 // Function to get voice by emotion using Claude 4 analysis
-export function getVoiceByEmotion(emotion: string): string {
+export function getVoiceByEmotion(emotion) {
   const normalizedEmotion = emotion.toLowerCase().trim();
   
   // Direct lookup
-  if (voiceConfig[normalizedEmotion as keyof typeof voiceConfig]) {
-    return voiceConfig[normalizedEmotion as keyof typeof voiceConfig].voiceId;
+  if (voiceConfig[normalizedEmotion]) {
+    return voiceConfig[normalizedEmotion].voiceId;
   }
   
   // Lookup by associated emotions
@@ -92,8 +92,8 @@ export function getVoiceByEmotion(emotion: string): string {
 }
 
 // Function to get all available voices
-export function getAllVoices(): Record<string, string> {
-  const voices: Record<string, string> = {};
+export function getAllVoices() {
+  const voices = {};
   for (const [key, config] of Object.entries(voiceConfig)) {
     voices[key] = config.voiceId;
   }
@@ -101,11 +101,11 @@ export function getAllVoices(): Record<string, string> {
 }
 
 // Function to get voice description by emotion
-export function getVoiceDescription(emotion: string): string {
+export function getVoiceDescription(emotion) {
   const normalizedEmotion = emotion.toLowerCase().trim();
   
-  if (voiceConfig[normalizedEmotion as keyof typeof voiceConfig]) {
-    return voiceConfig[normalizedEmotion as keyof typeof voiceConfig].description;
+  if (voiceConfig[normalizedEmotion]) {
+    return voiceConfig[normalizedEmotion].description;
   }
   
   return voiceConfig.calm.description;

@@ -122,7 +122,7 @@ Keep responses conversational and natural, around 2-3 sentences. Focus on emotio
 
     const reply = completion.content
       .filter(c => c.type === 'text')
-      .map(c => (c as any).text)
+      .map(c => c.text)
       .join(" ")
       .trim();
     console.log("Claude reply:", reply);
@@ -153,4 +153,4 @@ app.get("/", (req, res) => {
 // 🔹 Start server
 app.listen(3001, () => {
   console.log("Backend with Claude 4 running at http://localhost:3001");
-});
+}); 
