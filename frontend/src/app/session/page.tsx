@@ -8,9 +8,11 @@ type Message = {
   text: string;
 };
 
-const vapi = typeof window !== 'undefined' ? new Vapi("96f6754c-f8d9-45cb-a47b-e78d6ea163bc") : null;
+const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc"; // ton API key publique Vapi
 
 export default function SessionPage() {
+  const [vapi, setVapi] = useState<Vapi | null>(null);
+  const [assistantId, setAssistantId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [feeling, setFeeling] = useState('');
   const [topic, setTopic] = useState('');
@@ -20,79 +22,95 @@ export default function SessionPage() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const vapiInstance = new Vapi(apiKey);
+    setVapi(vapiInstance);
+
+    vapiInstance.on('call-start', () => console.log('Call started'));
+    vapiInstance.on('call-end', () => console.log('Call ended'));
+    vapiInstance.on('message', (message) => {
+      if (message.type === 'transcript') {
+        console.log(`${message.role}: ${message.transcript}`);
+      }
+    });
+
+    return () => {
+      vapiInstance.stop();
+    };
+  }, []);
+
+  const fetchAssistantId = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/get-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: 'dummy input to trigger classification' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.voiceId) {
+        throw new Error('Failed to fetch assistant ID');
+      }
+      setAssistantId(data.voiceId);
+      return data.voiceId;
+    } catch (error) {
+      console.error('Error fetching assistant ID:', error);
+      return null;
+    }
+  };
+
   const startSession = () => {
     const selectedPersona = persona === 'custom' ? customPersona : persona;
-
     const introMessage: Message = {
       role: 'ai',
       text: `Hi, I'm here as your ${selectedPersona}. I understand you're feeling "${feeling}" and want to talk about "${topic}". I'm all ears.`,
     };
-
     setMessages([introMessage]);
     setHasStarted(true);
+  };
+
+  const startCall = async () => {
+    if (!vapi) return;
+    const id = assistantId ?? (await fetchAssistantId());
+    if (id) {
+      vapi.start({ voice: { voiceId: id } });
+    }
   };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMessage: Message = { role: "user", text: input };
+    const userMessage: Message = { role: 'user', text: input };
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setInput('');
 
     try {
-      const res = await fetch("http://localhost:3001/get-voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('http://localhost:3001/get-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input }),
       });
 
       const data = await res.json();
+      console.log('Voice ID reçu du backend:', data.voiceId);
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to fetch voice");
+        throw new Error(data.error || 'Failed to fetch voice');
       }
 
       const aiReply: Message = {
-        role: "ai",
+        role: 'ai',
         text: `I sense you're feeling ${data.personality}. I'll adjust my voice accordingly.`,
       };
 
       setMessages((prev) => [...prev, aiReply]);
 
+      await startCall();
+
       if (vapi) {
-        await vapi.start({
-          model: {
-            provider: "openai",
-            model: "gpt-3.5-turbo",
-            temperature: 0.7,
-            messages: [
-              {
-                role: "system",
-                content: `
-You are PolyTherapist, an AI therapist who adapts your personality and tone depending on the user's emotional state and situation.
-Detect the user's mood from their messages and respond accordingly using one of these personalities:
-
-1. Calm and nurturing (for anxiety/stress)
-2. Energetic and motivating (for motivation/goal setting)
-3. Warm and empathetic (for sadness/loneliness)
-4. Philosophical and zen (for introspection)
-5. Playful and lighthearted (for humor/icebreakers)
-
-When you respond, adapt your style and tone to the personality you chose.
-                `,
-              },
-            ],
-          },
-          voice: {
-            provider: "11labs",
-            voiceId: data.voiceId,
-          },
-        });
-
         await vapi.send({
-          type: "add-message",
+          type: 'add-message',
           message: {
-            role: "user",
+            role: 'user',
             content: input,
           },
         });
@@ -100,7 +118,7 @@ When you respond, adapt your style and tone to the personality you chose.
     } catch (error: any) {
       setMessages((prev) => [
         ...prev,
-        { role: "ai", text: `Error: ${error.message}` },
+        { role: 'ai', text: `Error: ${error.message}` },
       ]);
     }
   };

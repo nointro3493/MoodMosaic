@@ -47,6 +47,7 @@ Just return the personality label only — no sentence, no explanation.`,
     });
 
     const personality = completion.content[0]?.text?.trim().toLowerCase();
+    console.log("Detected personality:", personality);
 
 
     if (!personality || !voiceMap[personality]) {
@@ -59,6 +60,10 @@ Just return the personality label only — no sentence, no explanation.`,
     console.error("Claude API error :", err);
     return res.status(500).json({ error: "Claude API failed" });
   }
+});
+
+app.get("/", (req, res) => {
+  res.send("API is running. Use POST /get-voice.");
 });
 
 app.listen(3001, () => {
