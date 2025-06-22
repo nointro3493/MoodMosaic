@@ -6,13 +6,15 @@ import Vapi from '@vapi-ai/web';
 type Message = {
   role: 'user' | 'ai';
   text: string;
+  emotion?: string;
+  voiceId?: string;
 };
 
 const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc";
+const defaultVoiceId = "f291d7d9-8dee-4b1c-9d09-1826eba2d965"; // Voix par défaut
 
 export default function SessionPage() {
   const [vapi, setVapi] = useState<Vapi | null>(null);
-  const [assistantId, setAssistantId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [feeling, setFeeling] = useState('');
   const [topic, setTopic] = useState('');
@@ -20,20 +22,95 @@ export default function SessionPage() {
   const [customPersona, setCustomPersona] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [detectedMood, setDetectedMood] = useState<string | null>(null);
-  const [lastShownMood, setLastShownMood] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [transcript, setTranscript] = useState<Message[]>([]);
+  const [currentVoiceId, setCurrentVoiceId] = useState(defaultVoiceId);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fonction pour analyser l'émotion et obtenir la voix appropriée
+  const analyzeEmotionAndGetVoice = async (userInput: string): Promise<{ emotion: string; voiceId: string }> => {
+    try {
+      const response = await fetch('http://localhost:3001/get-voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ input: userInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze emotion');
+      }
+
+      const data = await response.json();
+      return {
+        emotion: data.personality,
+        voiceId: data.voiceId,
+      };
+    } catch (error) {
+      console.error('Error analyzing emotion:', error);
+      return {
+        emotion: 'calm',
+        voiceId: defaultVoiceId,
+      };
+    }
+  };
+
+  // Fonction pour obtenir une réponse de l'assistant
+  const getAssistantReply = async (userInput: string, emotion: string): Promise<string> => {
+    try {
+      const response = await fetch('http://localhost:3001/get-reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          input: userInput,
+          emotion: emotion,
+          persona: persona === 'custom' ? customPersona : persona
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get assistant reply');
+      }
+
+      const data = await response.json();
+      return data.reply;
+    } catch (error) {
+      console.error('Error getting assistant reply:', error);
+      return "I understand. Let's continue our conversation...";
+    }
+  };
 
   useEffect(() => {
     const vapiInstance = new Vapi(apiKey);
     setVapi(vapiInstance);
 
     vapiInstance.on('call-start', () => console.log('Call started'));
-    vapiInstance.on('call-end', () => console.log('Call ended'));
+    vapiInstance.on('call-end', () => {
+      console.log('Call ended');
+      setIsSpeaking(false);
+    });
+    vapiInstance.on('speech-start', () => {
+      console.log('Assistant speaking');
+      setIsSpeaking(true);
+    });
+    vapiInstance.on('speech-end', () => {
+      console.log('Assistant stopped speaking');
+      setIsSpeaking(false);
+    });
     vapiInstance.on('message', (message) => {
       if (message.type === 'transcript') {
-        console.log(`${message.role}: ${message.transcript}`);
+        setTranscript((prev) => [...prev, {
+          role: message.role === 'user' ? 'user' : 'ai',
+          text: message.transcript,
+        }]);
       }
+    });
+    vapiInstance.on('error', (error) => {
+      console.error('Vapi error:', error);
     });
 
     return () => {
@@ -41,110 +118,95 @@ export default function SessionPage() {
     };
   }, []);
 
-  const fetchAssistantId = async () => {
-    try {
-      const res = await fetch('http://localhost:3001/get-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: 'dummy input to trigger classification' }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.voiceId) {
-        throw new Error('Failed to fetch assistant ID');
-      }
-      setAssistantId(data.voiceId);
-      return data.voiceId;
-    } catch (error) {
-      console.error('Error fetching assistant ID:', error);
-      return null;
-    }
-  };
-
   const startSession = () => {
     const selectedPersona = persona === 'custom' ? customPersona : persona;
     const introMessage: Message = {
       role: 'ai',
       text: `Hi, I'm here as your ${selectedPersona}. I understand you're feeling "${feeling}" and want to talk about "${topic}". I'm all ears.`,
+      emotion: 'calm',
+      voiceId: defaultVoiceId,
     };
     setMessages([introMessage]);
     setHasStarted(true);
   };
 
-  const startCall = async (voiceId: string) => {
-    if (vapi) {
-      vapi.start({ voice: { voiceId } });
+  const startCall = async (voiceId: string = currentVoiceId) => {
+    if (!vapi) return;
+    try {
+      // Arrêter l'appel actuel s'il y en a un
+      vapi.stop();
+      
+      // Démarrer un nouvel appel avec la nouvelle voix
+      await vapi.start(voiceId);
+      setCurrentVoiceId(voiceId);
+    } catch (error) {
+      console.error("Error starting Vapi call:", error);
+      setMessages((prev) => [...prev, { 
+        role: 'ai', 
+        text: `Error starting voice call: ${error}`,
+        emotion: 'calm',
+        voiceId: defaultVoiceId
+      }]);
     }
   };
 
+  const endCall = () => {
+    if (vapi) vapi.stop();
+  };
+
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isAnalyzing) return;
 
     const userMessage: Message = { role: 'user', text: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setIsAnalyzing(true);
 
     try {
-      const [voiceRes, replyRes] = await Promise.all([
-        fetch('http://localhost:3001/get-voice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input }),
-        }),
-        fetch('http://localhost:3001/get-reply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input }),
-        }),
-      ]);
-
-      const voiceData = await voiceRes.json();
-      const replyData = await replyRes.json();
-
-      if (!voiceRes.ok || !replyRes.ok) {
-        throw new Error(voiceData.error || replyData.error || 'Something went wrong');
-      }
-
-      const newMood = voiceData.personality;
-      setDetectedMood(newMood);
-
-      const moodChanged = lastShownMood !== newMood;
-
-      const moodMessage: Message | null = moodChanged
-        ? {
-            role: 'ai',
-            text: `I sense you're feeling ${newMood}. I'll adjust my voice accordingly.`,
-          }
-        : null;
-
-      const aiReply: Message = {
+      // Analyser l'émotion et obtenir la voix appropriée
+      const { emotion, voiceId } = await analyzeEmotionAndGetVoice(input);
+      
+      // Obtenir la réponse de l'assistant
+      const aiReply = await getAssistantReply(input, emotion);
+      
+      const aiMessage: Message = {
         role: 'ai',
-        text: replyData.reply,
+        text: aiReply,
+        emotion: emotion,
+        voiceId: voiceId,
       };
 
-      if (moodMessage) {
-        setLastShownMood(newMood);
-        setMessages((prev) => [...prev, moodMessage, aiReply]);
+      setMessages((prev) => [...prev, aiMessage]);
+
+      // Démarrer l'appel vocal avec la nouvelle voix si elle est différente
+      if (voiceId !== currentVoiceId) {
+        await startCall(voiceId);
       } else {
-        setMessages((prev) => [...prev, aiReply]);
+        await startCall(voiceId);
       }
 
-      const id = assistantId ?? voiceData.voiceId;
-      if (!assistantId) setAssistantId(id);
-      await startCall(id);
-
+      // Envoyer le message à Vapi
       if (vapi) {
         await vapi.send({
-          type: 'speak',
-          message: replyData.reply,
+          type: 'add-message',
+          message: {
+            role: 'user',
+            content: input,
+          },
         });
       }
-
     } catch (error: any) {
-      console.error("Error sending message:", error);
       setMessages((prev) => [
         ...prev,
-        { role: 'ai', text: `Error: ${error.message}` },
+        { 
+          role: 'ai', 
+          text: `Error: ${error.message || error}`,
+          emotion: 'calm',
+          voiceId: defaultVoiceId
+        },
       ]);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -158,9 +220,15 @@ export default function SessionPage() {
         {hasStarted ? 'Chat with your AI Therapist' : 'Before We Begin'}
       </h2>
 
-      {hasStarted && detectedMood && (
-        <div className="text-sm text-purple-700 font-medium text-right max-w-2xl mx-auto w-full mb-4 pr-2">
-          Mood: <span className="capitalize">{detectedMood}</span>
+      {isSpeaking && (
+        <div className="text-sm text-purple-600 text-center mb-2 animate-pulse">
+          🎤 Assistant is speaking...
+        </div>
+      )}
+
+      {isAnalyzing && (
+        <div className="text-sm text-blue-600 text-center mb-2 animate-pulse">
+          🔍 Analyzing your emotions...
         </div>
       )}
 
@@ -232,7 +300,12 @@ export default function SessionPage() {
                       : 'bg-gray-100 text-gray-800'
                   }`}
                 >
-                  {msg.text}
+                  <div>{msg.text}</div>
+                  {msg.role === 'ai' && msg.emotion && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Voice: {msg.emotion} {msg.voiceId !== currentVoiceId && '(changing...)'}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -245,15 +318,24 @@ export default function SessionPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Type something..."
-              className="flex-1 p-3 border border-gray-300 rounded-l-xl focus:outline-none focus:ring-2 focus:ring-purple-300 text-gray-800"
+              disabled={isAnalyzing}
+              className="flex-1 p-3 border border-gray-300 rounded-l-xl focus:outline-none focus:ring-2 focus:ring-purple-300 text-gray-800 disabled:opacity-50"
             />
             <button
               onClick={sendMessage}
-              className="px-5 py-3 bg-purple-600 text-white rounded-r-xl hover:bg-purple-700 transition"
+              disabled={isAnalyzing}
+              className="px-5 py-3 bg-purple-600 text-white rounded-r-xl hover:bg-purple-700 transition disabled:opacity-50"
             >
-              Send
+              {isAnalyzing ? 'Analyzing...' : 'Send'}
             </button>
           </div>
+
+          <button
+            onClick={endCall}
+            className="mt-4 text-sm text-red-500 text-center underline"
+          >
+            End Voice Session
+          </button>
         </>
       )}
     </main>
