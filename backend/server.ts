@@ -27,7 +27,7 @@ app.post("/get-voice", async (req, res) => {
 
   try {
     const completion = await anthropic.messages.create({
-      model: "claude-4",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 20,
       temperature: 0.2,
       system: `
@@ -48,6 +48,7 @@ Just return the personality label only — no sentence, no explanation.`,
 
     const personality = completion.content[0]?.text?.trim().toLowerCase();
 
+
     if (!personality || !voiceMap[personality]) {
       return res.status(400).json({ error: "Could not determine personality" });
     }
@@ -55,7 +56,7 @@ Just return the personality label only — no sentence, no explanation.`,
     const voiceId = voiceMap[personality];
     return res.json({ personality, voiceId });
   } catch (err) {
-    console.error("Claude API error:", err);
+    console.error("Claude API error :", err);
     return res.status(500).json({ error: "Claude API failed" });
   }
 });

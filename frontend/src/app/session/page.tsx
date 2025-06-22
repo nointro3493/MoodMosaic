@@ -29,21 +29,45 @@ export default function SessionPage() {
     setHasStarted(true);
   };
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  const sendMessage = async () => {
+  if (!input.trim()) return;
 
-    const userMessage: Message = { role: 'user', text: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+  const userMessage: Message = { role: "user", text: input };
+  setMessages((prev) => [...prev, userMessage]);
 
-    setTimeout(() => {
-      const aiReply: Message = {
-        role: 'ai',
-        text: `I hear you. Let’s explore that together.`,
-      };
-      setMessages((prev) => [...prev, aiReply]);
-    }, 800);
-  };
+  setInput("");
+
+  try {
+    const res = await fetch("http://localhost:3001/get-voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: `Error: ${err.error || "Something went wrong"}` },
+      ]);
+      return;
+    }
+
+    const data = await res.json();
+    const aiReply: Message = {
+      role: "ai",
+      text: `I sense you're feeling ${data.personality}. I'll adjust my voice accordingly.`,
+    };
+
+    setMessages((prev) => [...prev, aiReply]);
+  } catch (error: any) {
+    setMessages((prev) => [
+      ...prev,
+      { role: "ai", text: `Error: ${error.message || "Network error"}` },
+    ]);
+  }
+};
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
