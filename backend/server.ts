@@ -14,11 +14,8 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 
 const voiceMap: Record<string, string> = {
-  calm: "calm_default",
-  energetic: "energetic_voice_id",
-  empathetic: "empathetic_voice_id",
-  philosophical: "zen_voice_id",
-  playful: "playful_voice_id",
+  calm: "f291d7d9-8dee-4b1c-9d09-1826eba2d965",
+  energetic: "04a3829a-0e7f-48ca-934a-0a38d6705507",
 };
 
 app.post("/get-voice", async (req, res) => {
@@ -39,9 +36,6 @@ Based on the user message, return only ONE of the following moods:
 
 - calm (for anxiety/stress)
 - energetic (for motivation)
-- empathetic (for sadness)
-- philosophical (for introspection)
-- playful (for humor/light-heartedness)
 
 Just return the personality label only — no sentence, no explanation.`,
       messages: [
