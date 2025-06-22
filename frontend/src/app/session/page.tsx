@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Vapi from '@vapi-ai/web';
 
 type Message = {
   role: 'user' | 'ai';
   text: string;
 };
+
+const vapi = typeof window !== 'undefined' ? new Vapi("96f6754c-f8d9-45cb-a47b-e78d6ea163bc") : null;
 
 export default function SessionPage() {
   const [hasStarted, setHasStarted] = useState(false);
@@ -30,44 +33,77 @@ export default function SessionPage() {
   };
 
   const sendMessage = async () => {
-  if (!input.trim()) return;
+    if (!input.trim()) return;
 
-  const userMessage: Message = { role: "user", text: input };
-  setMessages((prev) => [...prev, userMessage]);
+    const userMessage: Message = { role: "user", text: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
 
-  setInput("");
+    try {
+      const res = await fetch("http://localhost:3001/get-voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
 
-  try {
-    const res = await fetch("http://localhost:3001/get-voice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input }),
-    });
+      const data = await res.json();
 
-    if (!res.ok) {
-      const err = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch voice");
+      }
+
+      const aiReply: Message = {
+        role: "ai",
+        text: `I sense you're feeling ${data.personality}. I'll adjust my voice accordingly.`,
+      };
+
+      setMessages((prev) => [...prev, aiReply]);
+
+      if (vapi) {
+        await vapi.start({
+          model: {
+            provider: "openai",
+            model: "gpt-3.5-turbo",
+            temperature: 0.7,
+            messages: [
+              {
+                role: "system",
+                content: `
+You are PolyTherapist, an AI therapist who adapts your personality and tone depending on the user's emotional state and situation.
+Detect the user's mood from their messages and respond accordingly using one of these personalities:
+
+1. Calm and nurturing (for anxiety/stress)
+2. Energetic and motivating (for motivation/goal setting)
+3. Warm and empathetic (for sadness/loneliness)
+4. Philosophical and zen (for introspection)
+5. Playful and lighthearted (for humor/icebreakers)
+
+When you respond, adapt your style and tone to the personality you chose.
+                `,
+              },
+            ],
+          },
+          voice: {
+            provider: "11labs",
+            voiceId: data.voiceId,
+          },
+        });
+
+        await vapi.send({
+          type: "add-message",
+          message: {
+            role: "user",
+            content: input,
+          },
+        });
+      }
+    } catch (error: any) {
       setMessages((prev) => [
         ...prev,
-        { role: "ai", text: `Error: ${err.error || "Something went wrong"}` },
+        { role: "ai", text: `Error: ${error.message}` },
       ]);
-      return;
     }
-
-    const data = await res.json();
-    const aiReply: Message = {
-      role: "ai",
-      text: `I sense you're feeling ${data.personality}. I'll adjust my voice accordingly.`,
-    };
-
-    setMessages((prev) => [...prev, aiReply]);
-  } catch (error: any) {
-    setMessages((prev) => [
-      ...prev,
-      { role: "ai", text: `Error: ${error.message || "Network error"}` },
-    ]);
-  }
-};
-
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
