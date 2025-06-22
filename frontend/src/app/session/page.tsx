@@ -8,11 +8,12 @@ type Message = {
   text: string;
 };
 
+
 const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc"; // ton API key publique Vapi
+const assistantId = "04a3829a-0e7f-48ca-934a-0a38d6705507"; // remplace avec l'ID de ton assistant Vapi
 
 export default function SessionPage() {
   const [vapi, setVapi] = useState<Vapi | null>(null);
-  const [assistantId, setAssistantId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [feeling, setFeeling] = useState('');
   const [topic, setTopic] = useState('');
@@ -39,25 +40,6 @@ export default function SessionPage() {
     };
   }, []);
 
-  const fetchAssistantId = async () => {
-    try {
-      const res = await fetch('http://localhost:3001/get-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: 'dummy input to trigger classification' })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.voiceId) {
-        throw new Error('Failed to fetch assistant ID');
-      }
-      setAssistantId(data.voiceId);
-      return data.voiceId;
-    } catch (error) {
-      console.error('Error fetching assistant ID:', error);
-      return null;
-    }
-  };
-
   const startSession = () => {
     const selectedPersona = persona === 'custom' ? customPersona : persona;
     const introMessage: Message = {
@@ -68,11 +50,9 @@ export default function SessionPage() {
     setHasStarted(true);
   };
 
-  const startCall = async () => {
-    if (!vapi) return;
-    const id = assistantId ?? (await fetchAssistantId());
-    if (id) {
-      vapi.start({ voice: { voiceId: id } });
+  const startCall = () => {
+    if (vapi) {
+      vapi.start(assistantId);
     }
   };
 
@@ -103,18 +83,7 @@ export default function SessionPage() {
       };
 
       setMessages((prev) => [...prev, aiReply]);
-
-      await startCall();
-
-      if (vapi) {
-        await vapi.send({
-          type: 'add-message',
-          message: {
-            role: 'user',
-            content: input,
-          },
-        });
-      }
+      startCall();
     } catch (error: any) {
       setMessages((prev) => [
         ...prev,
