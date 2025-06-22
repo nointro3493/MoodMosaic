@@ -1,23 +1,21 @@
-// backend/server.ts
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { Anthropic } from "@anthropic-ai/sdk";
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Hardcoded Claude API key (replace with your actual key)
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-
+// Map moods to Vapi voice IDs
 const voiceMap: Record<string, string> = {
   calm: "f291d7d9-8dee-4b1c-9d09-1826eba2d965",
   energetic: "04a3829a-0e7f-48ca-934a-0a38d6705507",
 };
 
+// 🔹 Mood classification endpoint
 app.post("/get-voice", async (req, res) => {
   const { input } = req.body;
 
@@ -38,17 +36,11 @@ Based on the user message, return only ONE of the following moods:
 - energetic (for motivation)
 
 Just return the personality label only — no sentence, no explanation.`,
-      messages: [
-        {
-          role: "user",
-          content: input,
-        },
-      ],
+      messages: [{ role: "user", content: input }],
     });
 
     const personality = completion.content[0]?.text?.trim().toLowerCase();
     console.log("Detected personality:", personality);
-
 
     if (!personality || !voiceMap[personality]) {
       return res.status(400).json({ error: "Could not determine personality" });
@@ -57,15 +49,43 @@ Just return the personality label only — no sentence, no explanation.`,
     const voiceId = voiceMap[personality];
     return res.json({ personality, voiceId });
   } catch (err) {
-    console.error("Claude API error :", err);
+    console.error("Claude API error:", err);
     return res.status(500).json({ error: "Claude API failed" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("API is running. Use POST /get-voice.");
+// 🔹 Claude response generation endpoint
+app.post("/get-reply", async (req, res) => {
+  const { input } = req.body;
+
+  if (!input) {
+    return res.status(400).json({ error: "Missing input" });
+  }
+
+  try {
+    const completion = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 400,
+      temperature: 0.7,
+      messages: [{ role: "user", content: input }],
+    });
+
+    const reply = completion.content.map(c => c.text).join(" ").trim();
+    console.log("Claude reply:", reply);
+
+    return res.json({ reply });
+  } catch (err) {
+    console.error("Claude API error:", err);
+    return res.status(500).json({ error: "Claude API failed" });
+  }
 });
 
+// 🔹 Root check
+app.get("/", (req, res) => {
+  res.send("API is running. Use POST /get-voice or /get-reply.");
+});
+
+// 🔹 Start server
 app.listen(3001, () => {
   console.log("Backend with Claude running at http://localhost:3001");
 });

@@ -8,12 +8,11 @@ type Message = {
   text: string;
 };
 
-
-const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc"; // ton API key publique Vapi
-const assistantId = "04a3829a-0e7f-48ca-934a-0a38d6705507"; // remplace avec l'ID de ton assistant Vapi
+const apiKey = "96f6754c-f8d9-45cb-a47b-e78d6ea163bc";
 
 export default function SessionPage() {
   const [vapi, setVapi] = useState<Vapi | null>(null);
+  const [assistantId, setAssistantId] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [feeling, setFeeling] = useState('');
   const [topic, setTopic] = useState('');
@@ -21,6 +20,8 @@ export default function SessionPage() {
   const [customPersona, setCustomPersona] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [detectedMood, setDetectedMood] = useState<string | null>(null);
+  const [lastShownMood, setLastShownMood] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +41,25 @@ export default function SessionPage() {
     };
   }, []);
 
+  const fetchAssistantId = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/get-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: 'dummy input to trigger classification' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.voiceId) {
+        throw new Error('Failed to fetch assistant ID');
+      }
+      setAssistantId(data.voiceId);
+      return data.voiceId;
+    } catch (error) {
+      console.error('Error fetching assistant ID:', error);
+      return null;
+    }
+  };
+
   const startSession = () => {
     const selectedPersona = persona === 'custom' ? customPersona : persona;
     const introMessage: Message = {
@@ -50,9 +70,9 @@ export default function SessionPage() {
     setHasStarted(true);
   };
 
-  const startCall = () => {
+  const startCall = async (voiceId: string) => {
     if (vapi) {
-      vapi.start(assistantId);
+      vapi.start({ voice: { voiceId } });
     }
   };
 
@@ -64,27 +84,63 @@ export default function SessionPage() {
     setInput('');
 
     try {
-      const res = await fetch('http://localhost:3001/get-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
-      });
+      const [voiceRes, replyRes] = await Promise.all([
+        fetch('http://localhost:3001/get-voice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input }),
+        }),
+        fetch('http://localhost:3001/get-reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input }),
+        }),
+      ]);
 
-      const data = await res.json();
-      console.log('Voice ID reçu du backend:', data.voiceId);
+      const voiceData = await voiceRes.json();
+      const replyData = await replyRes.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch voice');
+      if (!voiceRes.ok || !replyRes.ok) {
+        throw new Error(voiceData.error || replyData.error || 'Something went wrong');
       }
+
+      const newMood = voiceData.personality;
+      setDetectedMood(newMood);
+
+      const moodChanged = lastShownMood !== newMood;
+
+      const moodMessage: Message | null = moodChanged
+        ? {
+            role: 'ai',
+            text: `I sense you're feeling ${newMood}. I'll adjust my voice accordingly.`,
+          }
+        : null;
 
       const aiReply: Message = {
         role: 'ai',
-        text: `I sense you're feeling ${data.personality}. I'll adjust my voice accordingly.`,
+        text: replyData.reply,
       };
 
-      setMessages((prev) => [...prev, aiReply]);
-      startCall();
+      if (moodMessage) {
+        setLastShownMood(newMood);
+        setMessages((prev) => [...prev, moodMessage, aiReply]);
+      } else {
+        setMessages((prev) => [...prev, aiReply]);
+      }
+
+      const id = assistantId ?? voiceData.voiceId;
+      if (!assistantId) setAssistantId(id);
+      await startCall(id);
+
+      if (vapi) {
+        await vapi.send({
+          type: 'speak',
+          message: replyData.reply,
+        });
+      }
+
     } catch (error: any) {
+      console.error("Error sending message:", error);
       setMessages((prev) => [
         ...prev,
         { role: 'ai', text: `Error: ${error.message}` },
@@ -98,9 +154,15 @@ export default function SessionPage() {
 
   return (
     <main className="min-h-screen flex flex-col bg-purple-50 px-4 py-10">
-      <h2 className="text-3xl font-bold text-purple-800 text-center mb-8">
+      <h2 className="text-3xl font-bold text-purple-800 text-center mb-4">
         {hasStarted ? 'Chat with your AI Therapist' : 'Before We Begin'}
       </h2>
+
+      {hasStarted && detectedMood && (
+        <div className="text-sm text-purple-700 font-medium text-right max-w-2xl mx-auto w-full mb-4 pr-2">
+          Mood: <span className="capitalize">{detectedMood}</span>
+        </div>
+      )}
 
       {!hasStarted ? (
         <div className="w-full max-w-3xl mx-auto bg-white px-10 py-12 rounded-3xl shadow-xl space-y-6">
